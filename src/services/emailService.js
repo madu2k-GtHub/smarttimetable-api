@@ -1,15 +1,26 @@
 const nodemailer = require('nodemailer');
 
 // Initialize transporter
+// Port 465 requires SSL (secure: true)
+// Port 587 uses STARTTLS (secure: false, but upgrades to TLS)
+const smtpPort = parseInt(process.env.SMTP_PORT || '587', 10);
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: process.env.SMTP_PORT,
-  secure: false,
+  port: smtpPort,
+  secure: smtpPort === 465,  // true for 465 (SSL), false for 587 (STARTTLS)
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASSWORD
+  },
+  connectionTimeout: 30000,    // 30 seconds
+  greetingTimeout: 30000,
+  socketTimeout: 30000,
+  tls: {
+    rejectUnauthorized: false  // Allow self-signed certs
   }
 });
+
+console.log(`📧 SMTP configured: ${process.env.SMTP_HOST}:${smtpPort} (secure=${smtpPort === 465})`);
 
 /**
  * Send OTP verification email
