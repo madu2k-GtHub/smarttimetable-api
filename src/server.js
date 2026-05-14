@@ -40,6 +40,20 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Temporary debug endpoint - shows DB config (remove after fixing)
+app.get('/debug-db', (req, res) => {
+  res.json({
+    NODE_ENV: process.env.NODE_ENV,
+    has_DATABASE_URL: !!process.env.DATABASE_URL,
+    DATABASE_URL_preview: process.env.DATABASE_URL ? process.env.DATABASE_URL.substring(0, 30) + '...' : 'NOT SET',
+    DB_HOST: process.env.DB_HOST || 'NOT SET',
+    DB_PORT: process.env.DB_PORT || 'NOT SET',
+    DB_NAME: process.env.DB_NAME || 'NOT SET',
+    DB_USER: process.env.DB_USER || 'NOT SET',
+    has_DB_PASSWORD: !!process.env.DB_PASSWORD
+  });
+});
+
 // 404 Handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
