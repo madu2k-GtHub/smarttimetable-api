@@ -3,11 +3,13 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const path = require('path');
-require('dotenv').config({
-  path: process.env.NODE_ENV === 'production'
-    ? path.join(__dirname, '..', '.env')
-    : path.join(__dirname, '..', '.env.development')
-});
+// Load .env only in development mode
+// In production (Railway), environment variables are injected automatically
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config({
+    path: path.join(__dirname, '..', '.env.development')
+  });
+}
 
 const indexRoutes = require('./routes/index');
 const authRoutes = require('./routes/auth');
