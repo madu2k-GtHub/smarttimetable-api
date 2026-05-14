@@ -211,9 +211,11 @@ const verifyOTP = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // Create profile first
+    // Create profile first - explicitly generate UUID
     const profileResult = await client.query(
-      'INSERT INTO profiles DEFAULT VALUES RETURNING id'
+      `INSERT INTO profiles (id, created_at, updated_at)
+       VALUES (gen_random_uuid(), NOW(), NOW())
+       RETURNING id`
     );
     const profileId = profileResult.rows[0].id;
 
@@ -276,10 +278,12 @@ const verifyOTP = async (req, res) => {
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('Error in verifyOTP:', error);
+    console.error('❌ Error in verifyOTP:', error.message);
+    console.error('Stack:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to verify OTP'
+      error: 'Failed to verify OTP',
+      details: error.message
     });
   } finally {
     client.release();
