@@ -54,6 +54,43 @@ app.get('/debug-db', (req, res) => {
   });
 });
 
+// Temporary admin endpoint - resets database schema
+// Drops all tables and recreates them with the correct schema
+app.post('/admin/reset-db/:secret', async (req, res) => {
+  if (req.params.secret !== 'reset-smarttimetable-2026') {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
+  const { pool } = require('./config/db');
+  const { setupDatabase } = require('./utils/setupDatabase');
+  try {
+    const client = await pool.connect();
+    console.log('🗑️  Dropping all tables...');
+    await client.query(`
+      DROP TABLE IF EXISTS verification_logs CASCADE;
+      DROP TABLE IF EXISTS phone_verifications CASCADE;
+      DROP TABLE IF EXISTS email_verifications CASCADE;
+      DROP TABLE IF EXISTS payment_methods CASCADE;
+      DROP TABLE IF EXISTS profile_syncs CASCADE;
+      DROP TABLE IF EXISTS achievements CASCADE;
+      DROP TABLE IF EXISTS rewards CASCADE;
+      DROP TABLE IF EXISTS routine_logs CASCADE;
+      DROP TABLE IF EXISTS routines CASCADE;
+      DROP TABLE IF EXISTS tasks CASCADE;
+      DROP TABLE IF EXISTS user_stats CASCADE;
+      DROP TABLE IF EXISTS users CASCADE;
+      DROP TABLE IF EXISTS profiles CASCADE;
+    `);
+    client.release();
+    console.log('✅ All tables dropped');
+    console.log('🏗️  Recreating tables...');
+    await setupDatabase();
+    res.json({ success: true, message: 'Database reset and recreated successfully' });
+  } catch (error) {
+    console.error('❌ DB reset error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // 404 Handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
