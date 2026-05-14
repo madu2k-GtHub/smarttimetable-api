@@ -65,5 +65,5 @@ app.listen(PORT, () => {
     .catch(error => {
       console.error('⚠️ SMTP connection error:', error.message);
       console.log('⚠️ Email OTP verification will not work until SMTP is configured');
-  }
+    });
 });
