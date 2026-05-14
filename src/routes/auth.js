@@ -2,8 +2,8 @@
 const express = require('express');
 const { pool } = require('../config/db');
 const authMiddleware = require('../middleware/auth');
-const { authValidators, emailVerificationValidators, handleValidationErrors } = require('../middleware/validators');
-const { registerStep1, verifyOTP, resendOTP, login } = require('../controllers/authController');
+const { authValidators, emailVerificationValidators, passwordResetValidators, handleValidationErrors } = require('../middleware/validators');
+const { registerStep1, verifyOTP, resendOTP, login, forgotPassword, resetPassword } = require('../controllers/authController');
 
 const router = express.Router();
 
@@ -50,6 +50,26 @@ router.post('/login',
   ...authValidators.login,
   handleValidationErrors,
   login
+);
+
+/**
+ * POST /api/auth/forgot-password
+ * Send password reset OTP to email
+ */
+router.post('/forgot-password',
+  ...passwordResetValidators.forgotPassword,
+  handleValidationErrors,
+  forgotPassword
+);
+
+/**
+ * POST /api/auth/reset-password
+ * Verify OTP and set new password
+ */
+router.post('/reset-password',
+  ...passwordResetValidators.resetPassword,
+  handleValidationErrors,
+  resetPassword
 );
 
 /**

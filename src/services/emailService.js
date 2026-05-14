@@ -244,8 +244,105 @@ const testEmailConnection = async () => {
   }
 };
 
+/**
+ * Send password reset email
+ * @param {string} email - User's email address
+ * @param {string} otp - 6-digit OTP code
+ * @returns {Promise<object>} Result with success and messageId
+ */
+const sendPasswordResetEmail = async (email, otp) => {
+  try {
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 5px 5px 0 0; }
+          .content { background: #f9f9f9; padding: 30px; border-radius: 0 0 5px 5px; }
+          .otp-box { background: white; border: 2px dashed #4CAF50; padding: 20px; text-align: center; margin: 20px 0; border-radius: 5px; }
+          .otp-code { font-size: 36px; font-weight: bold; letter-spacing: 5px; color: #4CAF50; font-family: monospace; }
+          .warning { color: #d32f2f; font-size: 12px; margin-top: 10px; }
+          .footer { color: #999; font-size: 12px; margin-top: 20px; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>SmartTimetable</h1>
+            <p>Password Reset</p>
+          </div>
+          <div class="content">
+            <p>Hello,</p>
+            <p>We received a request to reset your password for your SmartTimetable account.</p>
+
+            <div class="otp-box">
+              <p style="margin: 0; color: #999; font-size: 12px;">Your password reset code:</p>
+              <div class="otp-code">${otp}</div>
+              <p style="margin: 10px 0 0 0; color: #999; font-size: 11px;">This code expires in 10 minutes</p>
+            </div>
+
+            <p>Enter this code in the app to reset your password.</p>
+
+            <div class="warning">
+              <strong>⚠️ Security Notice:</strong> Never share this code with anyone. SmartTimetable support will never ask for this code.
+            </div>
+
+            <p style="margin-top: 30px; color: #999; font-size: 12px;">
+              If you did not request a password reset, please ignore this email. Your password will not be changed.
+            </p>
+          </div>
+          <div class="footer">
+            <p>© 2026 SmartTimetable. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+
+    const plainText = `
+SmartTimetable Password Reset
+
+Hello,
+
+We received a request to reset your password for your SmartTimetable account.
+
+Your password reset code: ${otp}
+
+This code expires in 10 minutes.
+
+Enter this code in the app to reset your password.
+
+SECURITY NOTICE: Never share this code with anyone. SmartTimetable support will never ask for this code.
+
+If you did not request a password reset, please ignore this email. Your password will not be changed.
+
+© 2026 SmartTimetable. All rights reserved.
+    `;
+
+    const result = await transporter.sendMail({
+      from: `"${process.env.SMTP_FROM_NAME}" <${process.env.SMTP_FROM_EMAIL}>`,
+      to: email,
+      subject: 'SmartTimetable Password Reset Code',
+      text: plainText,
+      html: htmlContent
+    });
+
+    console.log(`✅ Password reset email sent to ${email} (Message ID: ${result.messageId})`);
+    return {
+      success: true,
+      messageId: result.messageId
+    };
+  } catch (error) {
+    console.error(`❌ Failed to send password reset email to ${email}:`, error.message);
+    throw error;
+  }
+};
+
 module.exports = {
   sendOTPEmail,
   sendWelcomeEmail,
+  sendPasswordResetEmail,
   testEmailConnection
 };

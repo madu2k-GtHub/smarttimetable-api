@@ -543,6 +543,32 @@ const emailVerificationValidators = {
   ]
 };
 
+/**
+ * Password Reset Validators
+ */
+const passwordResetValidators = {
+  forgotPassword: [
+    body('email')
+      .isEmail().withMessage('Email must be a valid email address')
+      .normalizeEmail()
+      .toLowerCase()
+  ],
+  resetPassword: [
+    body('email')
+      .isEmail().withMessage('Email must be a valid email address')
+      .normalizeEmail()
+      .toLowerCase(),
+    body('otp')
+      .trim()
+      .matches(/^\d{6}$/).withMessage('OTP must be exactly 6 digits'),
+    body('newPassword')
+      .isLength({ min: 6 }).withMessage('Password must be at least 6 characters long')
+      .matches(/[A-Z]/).withMessage('Password must contain at least one uppercase letter')
+      .matches(/[a-z]/).withMessage('Password must contain at least one lowercase letter')
+      .matches(/[0-9]/).withMessage('Password must contain at least one number')
+  ]
+};
+
 module.exports = {
   // Error handler
   handleValidationErrors,
@@ -550,6 +576,7 @@ module.exports = {
   // Validator groups
   authValidators,
   emailVerificationValidators,
+  passwordResetValidators,
   profileValidators,
   taskValidators,
   routineValidators,

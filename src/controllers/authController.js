@@ -2,7 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { pool } = require('../config/db');
 const { generateOTP, hashOTP, verifyOTP: verifyOTPHash, getOTPExpiry } = require('../utils/otp');
-const { sendOTPEmail, sendWelcomeEmail } = require('../services/emailService');
+const { sendOTPEmail, sendWelcomeEmail, sendPasswordResetEmail } = require('../services/emailService');
 
 /**
  * POST /api/auth/register
@@ -444,9 +444,244 @@ const login = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/auth/forgot-password
+ * Send password reset OTP to email
+ */
+const forgotPassword = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    console.log('🔄 Forgot Password - Sending reset OTP');
+
+    await client.query('BEGIN');
+
+    const { email } = req.body;
+
+    // Check if user exists
+    const userResult = await client.query(
+      'SELECT id FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (userResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({
+        success: false,
+        error: 'No account found with this email'
+      });
+    }
+
+    // Check cooldown: is there a recent unused reset request?
+    const existingReset = await client.query(
+      'SELECT * FROM password_resets WHERE email = $1 AND used = false',
+      [email]
+    );
+
+    if (existingReset.rows.length > 0) {
+      const existing = existingReset.rows[0];
+      const lastCreated = new Date(existing.created_at);
+      const now = new Date();
+      const secondsSinceLastOTP = (now - lastCreated) / 1000;
+      const cooldownSeconds = 30;
+
+      if (secondsSinceLastOTP < cooldownSeconds) {
+        const secondsToWait = Math.ceil(cooldownSeconds - secondsSinceLastOTP);
+        await client.query('ROLLBACK');
+        return res.status(429).json({
+          success: false,
+          error: `Please wait ${secondsToWait} seconds before requesting another reset code`
+        });
+      }
+    }
+
+    // Delete old unused reset records for this email
+    await client.query(
+      'DELETE FROM password_resets WHERE email = $1',
+      [email]
+    );
+
+    // Generate OTP
+    const otp = generateOTP();
+    const otpHash = hashOTP(otp);
+    const expiresAt = getOTPExpiry(10);
+
+    // Store in password_resets table
+    await client.query(
+      `INSERT INTO password_resets (email, otp_hash, expires_at, created_at)
+       VALUES ($1, $2, $3, NOW())`,
+      [email, otpHash, expiresAt]
+    );
+
+    await client.query('COMMIT');
+
+    // Send password reset email
+    try {
+      console.log(`📧 Sending password reset OTP to ${email}...`);
+      await sendPasswordResetEmail(email, otp);
+      console.log(`✅ Password reset email sent successfully to ${email}`);
+    } catch (emailError) {
+      console.error('❌ Password reset email sending failed:', emailError.message);
+      // Clean up the reset record if email fails
+      await pool.query(
+        'DELETE FROM password_resets WHERE email = $1',
+        [email]
+      );
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to send password reset email. ' + emailError.message
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Password reset code sent to ${email}`,
+      data: {
+        email,
+        expiresIn: 600,
+        resendCooldown: 30
+      }
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('❌ Error in forgotPassword:', error.message);
+    console.error('Stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process password reset request'
+    });
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * POST /api/auth/reset-password
+ * Verify OTP and set new password
+ */
+const resetPassword = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    console.log('🔄 Reset Password - Verifying OTP and updating password');
+
+    await client.query('BEGIN');
+
+    const { email, otp, newPassword } = req.body;
+
+    // Get password reset record
+    const resetResult = await client.query(
+      'SELECT * FROM password_resets WHERE email = $1 AND used = false',
+      [email]
+    );
+
+    if (resetResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        error: 'No pending password reset for this email'
+      });
+    }
+
+    const resetRecord = resetResult.rows[0];
+
+    // Check if OTP expired
+    if (new Date() > new Date(resetRecord.expires_at)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        error: 'Reset code has expired. Request a new one.'
+      });
+    }
+
+    // Check attempts
+    if (resetRecord.attempts >= resetRecord.max_attempts) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({
+        success: false,
+        error: 'Too many failed attempts. Request a new reset code.'
+      });
+    }
+
+    // Verify OTP
+    if (!verifyOTPHash(otp, resetRecord.otp_hash)) {
+      // Increment attempts
+      const newAttempts = resetRecord.attempts + 1;
+      const attemptsRemaining = resetRecord.max_attempts - newAttempts;
+
+      await client.query(
+        'UPDATE password_resets SET attempts = $1 WHERE id = $2',
+        [newAttempts, resetRecord.id]
+      );
+
+      await client.query('COMMIT');
+      return res.status(400).json({
+        success: false,
+        error: `Invalid reset code. ${attemptsRemaining} attempts remaining`
+      });
+    }
+
+    // OTP is valid - hash new password
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    // Update user's password
+    await client.query(
+      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE email = $2',
+      [passwordHash, email]
+    );
+
+    // Mark password reset as used
+    await client.query(
+      'UPDATE password_resets SET used = true, used_at = NOW() WHERE id = $1',
+      [resetRecord.id]
+    );
+
+    // Delete all password_resets for this email
+    await client.query(
+      'DELETE FROM password_resets WHERE email = $1',
+      [email]
+    );
+
+    // Get user id for logging
+    const userResult = await client.query(
+      'SELECT id FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (userResult.rows.length > 0) {
+      // Log in verification_logs
+      await client.query(
+        `INSERT INTO verification_logs (user_id, verification_type, status, created_at)
+         VALUES ($1, 'password_reset', 'success', NOW())`,
+        [userResult.rows[0].id]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successful. You can now log in.'
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('❌ Error in resetPassword:', error.message);
+    console.error('Stack:', error.stack);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reset password'
+    });
+  } finally {
+    client.release();
+  }
+};
+
 module.exports = {
   registerStep1,
   verifyOTP,
   resendOTP,
-  login
+  login,
+  forgotPassword,
+  resetPassword
 };

@@ -173,6 +173,22 @@ const setupDatabase = async () => {
     `);
     console.log('✅ Created email_verifications table');
 
+    // 11.5. Create password_resets table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS password_resets (
+        id           SERIAL PRIMARY KEY,
+        email        VARCHAR(255) NOT NULL,
+        otp_hash     VARCHAR(255) NOT NULL,
+        attempts     INTEGER DEFAULT 0,
+        max_attempts INTEGER DEFAULT 5,
+        expires_at   TIMESTAMP NOT NULL,
+        used         BOOLEAN DEFAULT false,
+        used_at      TIMESTAMP,
+        created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    console.log('✅ Created password_resets table');
+
     // 12. Create verification_logs table (audit trail)
     await client.query(`
       CREATE TABLE IF NOT EXISTS verification_logs (
@@ -272,6 +288,12 @@ const setupDatabase = async () => {
     `);
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_payment_methods_user_id ON payment_methods(user_id);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_password_resets_email ON password_resets(email);
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_password_resets_expires_at ON password_resets(expires_at);
     `);
 
     console.log('✅ Created all indexes');
