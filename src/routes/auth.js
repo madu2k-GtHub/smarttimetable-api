@@ -1,5 +1,6 @@
 // routes/auth.js
 const express = require('express');
+const { pool } = require('../config/db');
 const authMiddleware = require('../middleware/auth');
 const { authValidators, emailVerificationValidators, handleValidationErrors } = require('../middleware/validators');
 const { registerStep1, verifyOTP, resendOTP, login } = require('../controllers/authController');
