@@ -49,23 +49,21 @@ app.use((req, res) => {
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, async () => {
+app.listen(PORT, () => {
   console.log(`🚀 SmartTimetable API running on port ${PORT}`);
   console.log(`📡 API Base URL: http://localhost:${PORT}/api`);
 
-  // Setup database schema
-  try {
-    await setupDatabase();
-  } catch (error) {
-    console.error('⚠️ Database setup error:', error.message);
-    console.log('⚠️ Continuing despite database error...');
-  }
+  // Setup database schema (non-blocking)
+  setupDatabase()
+    .catch(error => {
+      console.error('⚠️ Database setup error:', error.message);
+      console.log('⚠️ Continuing without full database setup...');
+    });
 
-  // Test email connection
-  try {
-    await testEmailConnection();
-  } catch (error) {
-    console.error('⚠️ SMTP connection error:', error.message);
-    console.log('⚠️ Email OTP verification will not work until SMTP is configured');
+  // Test email connection (non-blocking)
+  testEmailConnection()
+    .catch(error => {
+      console.error('⚠️ SMTP connection error:', error.message);
+      console.log('⚠️ Email OTP verification will not work until SMTP is configured');
   }
 });
