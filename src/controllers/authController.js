@@ -127,7 +127,12 @@ const registerStep1 = async (req, res) => {
     res.status(200).json({
       success: true,
       message: `OTP sent to ${email}`,
-      expires_in: 600
+      data: {
+        email,
+        message: `OTP sent to ${email}`,
+        expiresIn: 600,
+        resendCooldown: 30
+      }
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -267,13 +272,16 @@ const verifyOTP = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Email verified successfully',
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        profile_id: profileId,
-        email_verified: true
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          email_verified: true,
+          created_at: new Date().toISOString(),
+          profileId: profileId
+        },
+        token
       }
     });
   } catch (error) {
@@ -362,7 +370,12 @@ const resendOTP = async (req, res) => {
     res.status(200).json({
       success: true,
       message: `New OTP sent to ${email}`,
-      expires_in: 600
+      data: {
+        email,
+        message: `New OTP sent to ${email}`,
+        expiresIn: 600,
+        resendCooldown: 30
+      }
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -426,13 +439,17 @@ const login = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Login successful',
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        profile_id: user.profile_id,
-        email_verified: user.email_verified
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          username: user.username,
+          email_verified: user.email_verified,
+          created_at: user.created_at || new Date().toISOString(),
+          profileId: user.profile_id
+        },
+        token,
+        expires_in: 86400
       }
     });
   } catch (error) {
